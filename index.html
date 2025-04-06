@@ -28,15 +28,15 @@
     <div class="container">
         <h1>Liberation Day Tariff Simulator</h1>
         <div id="controls" class="row g-3">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="numRounds" class="form-label">Rounds:</label>
                 <input type="number" id="numRounds" class="form-control" value="5" min="1" max="20">
             </div>
-            <div class="col-md-3">
-                <label for="mistakeProb" class="form-label">Mistake Probability:</label>
+            <div class="col-md-2">
+                <label for="mistakeProb" class="form-label">Mistake Prob:</label>
                 <input type="number" id="mistakeProb" class="form-control" value="0.05" min="0" max="1" step="0.01">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="usStrategy" class="form-label">U.S. Strategy:</label>
                 <select id="usStrategy" class="form-select">
                     <option value="escalate">Escalate (T+DS+BR)</option>
@@ -44,7 +44,7 @@
                     <option value="negotiate">Negotiate (DN)</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label for="euStrategy" class="form-label">EU Strategy:</label>
                 <select id="euStrategy" class="form-select">
                     <option value="accept">Accept (ADS)</option>
@@ -53,15 +53,24 @@
                     <option value="ignore">Ignore (DN)</option>
                 </select>
             </div>
-            <div class="col-md-12 text-center mt-3">
+            <div class="col-md-2">
+                <label for="chinaStrategy" class="form-label">China Strategy:</label>
+                <select id="chinaStrategy" class="form-select">
+                    <option value="retaliate">Retaliate (RT)</option>
+                    <option value="redirect">Redirect (IT)</option>
+                    <option value="ignore">Ignore (DN)</option>
+                </select>
+            </div>
+            <div class="col-md-2 text-center mt-3">
                 <button id="runButton" class="btn btn-primary" onclick="runSimulation()">Run Simulation</button>
-                <button class="btn btn-info" onclick="document.getElementById('overlay').style.display='flex'">Show Info</button>
+                <button class="btn btn-info mt-2" onclick="document.getElementById('overlay').style.display='flex'">Show Info</button>
             </div>
         </div>
         <div id="visualizations">
             <div id="gridContainer">
                 <h3>Economic Health Grid</h3>
                 <svg id="gridSvg" width="400" height="400"></svg>
+                <!--<button id="animateButton" class="btn btn-secondary mt-2" onclick="animateGrid()">Animate Rounds</button>-->
             </div>
             <div id="resultsContainer">
                 <h3>Agent Payoffs</h3>
@@ -76,14 +85,112 @@
             <span id="overlay-close" onclick="document.getElementById('overlay').style.display='none'">X</span>
             <h3>Simulation Explained</h3>
             <h4>Payoff Matrix</h4>
-            <p>This simulation uses a simplified payoff matrix for the U.S. vs. EU game, capturing tariff strategies and LNG leverage. U.S. "Escalate" (T+DS+BR) nets 91 if EU retaliates (RT) due to LNG pressure, dropping to 81 otherwise. EU’s "Accept" (ADS) yields -30, while "Retaliate" (RT) sinks to -55 with energy costs. Simplified from a broader matrix, it balances revenue, GDP impact, and geopolitical strain.</p>
-            <h4>Why Cellular Automata (CA)?</h4>
-            <p>CA models complex systems by simulating local interactions—like trade blocs (USMCA, BRICS)—that ripple globally. Each cell’s health (0-1) reflects economic stability, updated by tariffs and neighbor effects. It’s ideal for visualizing systemic cascades in trade wars, where small moves trigger big shifts.</p>
+            <p>The U.S.-EU-China game uses a simplified payoff matrix. U.S. "Escalate" (T+DS+BR) nets 91 if EU/China retaliate (RT) due to LNG leverage and trade pressure, dropping to 81 otherwise. EU’s "Accept" (ADS) yields -30, "Retaliate" (RT) sinks to -55 with energy costs. China’s "Retaliate" (RT) scores -40, "Redirect" (IT) gains 25. It balances revenue, GDP hits, and geopolitics.</p>
+            <h4>Cellular Automata (CA) Choice &amp; Colors</h4>
+            <p>CA models trade bloc dynamics—local rules (tariffs, retaliation) ripple globally. Each cell’s health (0-1) shows economic stability: <strong>Red (0)</strong> = collapse, <strong>Yellow (0.5)</strong> = neutral, <strong>Green (1)</strong> = thriving. USMCA (top-left) resists tariffs better; BRICS (bottom-right) weakens faster.</p>
             <h4>Key Takeaways</h4>
-            <p>Findings show U.S. dominates with "Escalate" (~330 payoff), leveraging LNG and tariffs. EU struggles (-120) even with "Accept," while Emerging Markets (~100) and Crypto (~180) gain from redirection and instability. Expect trade wars over cooperation—escalation’s the Nash equilibrium, but long-term risks loom.</p>
+            <p>U.S. wins big (~330) with "Escalate," leveraging LNG and tariffs. EU (~-120) and China (~-100) struggle, even with "Accept" or "Redirect." Emerging Markets (~100) and Crypto (~180) gain from chaos. Escalation dominates—trade wars beat cooperation, but long-term instability looms.</p>
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <!--<script src="script.js"></script>-->
+  <script>
+    'use strict';
+
+// Initialize SVG and Plotly
+const svg = d3.select('#gridSvg');
+const cellSize = 400 / 20;
+const cells = svg.selectAll('rect')
+    .data(new Float32Array(20 * 20))
+    .enter()
+    .append('rect')
+    .attr('x', (_, i) => (i % 20) * cellSize)
+    .attr('y', (_, i) => Math.floor(i / 20) * cellSize)
+    .attr('width', cellSize)
+    .attr('height', cellSize)
+    .attr('fill', 'gray');
+
+const tbody = d3.select('#resultsTable tbody');
+Plotly.newPlot('payoffChart', [], {
+    title: 'Cumulative Payoffs Over Rounds',
+    xaxis: { title: 'Round' },
+    yaxis: { title: 'Cumulative Payoff' },
+    hovermode: 'closest'
+});
+
+const worker = new Worker('worker.js');
+let gridHistory = [];
+
+function runSimulation() {
+    const runButton = document.getElementById('runButton');
+    runButton.disabled = true;
+    runButton.textContent = 'Running...';
+
+    const numRounds = parseInt(document.getElementById('numRounds').value, 10);
+    const mistakeProb = parseFloat(document.getElementById('mistakeProb').value);
+    const usStrategy = document.getElementById('usStrategy').value;
+    const euStrategy = document.getElementById('euStrategy').value;
+    const chinaStrategy = document.getElementById('chinaStrategy').value;
+
+    worker.postMessage({ numRounds, mistakeProb, usStrategy, euStrategy, chinaStrategy });
+}
+
+worker.onmessage = function(e) {
+    const { payoffs, grid, payoffHistory, gridHistory: gh } = e.data;
+    gridHistory = gh;
+
+    // Update grid (final state)
+    requestAnimationFrame(() => {
+        cells.data(grid).attr('fill', d => d3.interpolateRdYlGn(d));
+    });
+
+    // Update table
+    const tableData = Object.entries(payoffs).map(([agent, payoff]) => ({ agent, payoff: payoff.toFixed(2) }));
+    const rows = tbody.selectAll('tr').data(tableData);
+    rows.exit().remove();
+    const enterRows = rows.enter().append('tr');
+    enterRows.append('td').text(d => d.agent);
+    enterRows.append('td').text(d => d.payoff);
+    rows.selectAll('td').data(d => [d.agent, d.payoff]).text(d => d);
+
+    // Update Plotly chart
+    const rounds = Array.from({ length: payoffHistory.US.length }, (_, i) => i + 1);
+    Plotly.react('payoffChart', [
+        { x: rounds, y: payoffHistory.US, name: 'U.S.', type: 'scatter', mode: 'lines', line: { color: 'blue' } },
+        { x: rounds, y: payoffHistory.EU, name: 'EU', type: 'scatter', mode: 'lines', line: { color: 'red' } },
+        { x: rounds, y: payoffHistory.China, name: 'China', type: 'scatter', mode: 'lines', line: { color: 'orange' } },
+        { x: rounds, y: payoffHistory.EM, name: 'Emerging', type: 'scatter', mode: 'lines', line: { color: 'green' } },
+        { x: rounds, y: payoffHistory.Crypto, name: 'Crypto', type: 'scatter', mode: 'lines', line: { color: 'purple' } }
+    ], {
+        title: 'Cumulative Payoffs Over Rounds',
+        xaxis: { title: 'Round' },
+        yaxis: { title: 'Cumulative Payoff' }
+    });
+
+    // Reset button
+    const runButton = document.getElementById('runButton');
+    runButton.disabled = false;
+    runButton.textContent = 'Run Simulation';
+};
+
+worker.onerror = function(error) {
+    console.error('Worker error:', error);
+    const runButton = document.getElementById('runButton');
+    runButton.disabled = false;
+    runButton.textContent = 'Run Simulation (Error)';
+};
+
+function animateGrid() {
+    let frame = 0;
+    const animate = () => {
+        if (frame < gridHistory.length) {
+            cells.data(gridHistory[frame]).attr('fill', d => d3.interpolateRdYlGn(d));
+            frame++;
+            requestAnimationFrame(animate);
+        }
+    };
+    requestAnimationFrame(animate);
+}
+  </script>
 </body>
 </html>
