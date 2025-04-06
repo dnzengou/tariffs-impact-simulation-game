@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liberation Day Tariff Simulator</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f8f9fa; margin: 20px; }
+        h1, h3 { color: #343a40; text-align: center; }
+        #controls { padding: 15px; background-color: #fff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #runButton { background-color: #4CAF50; border: none; }
+        #runButton:disabled { background-color: #cccccc; }
+        #visualizations { display: flex; flex-wrap: wrap; justify-content: space-around; margin-top: 20px; }
+        #gridContainer, #resultsContainer { background-color: #fff; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin: 10px; flex: 1; min-width: 300px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .chart { height: 400px; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        #overlay-content { background: #fff; padding: 20px; border-radius: 5px; max-width: 600px; max-height: 80vh; overflow-y: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        #overlay-close { float: right; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Liberation Day Tariff Simulator</h1>
+        <div id="controls" class="row g-3">
+            <div class="col-md-3">
+                <label for="numRounds" class="form-label">Rounds:</label>
+                <input type="number" id="numRounds" class="form-control" value="5" min="1" max="20">
+            </div>
+            <div class="col-md-3">
+                <label for="mistakeProb" class="form-label">Mistake Probability:</label>
+                <input type="number" id="mistakeProb" class="form-control" value="0.05" min="0" max="1" step="0.01">
+            </div>
+            <div class="col-md-3">
+                <label for="usStrategy" class="form-label">U.S. Strategy:</label>
+                <select id="usStrategy" class="form-select">
+                    <option value="escalate">Escalate (T+DS+BR)</option>
+                    <option value="moderate">Moderate (T+DS)</option>
+                    <option value="negotiate">Negotiate (DN)</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="euStrategy" class="form-label">EU Strategy:</label>
+                <select id="euStrategy" class="form-select">
+                    <option value="accept">Accept (ADS)</option>
+                    <option value="retaliate">Retaliate (RT)</option>
+                    <option value="diversify">Diversify (DR)</option>
+                    <option value="ignore">Ignore (DN)</option>
+                </select>
+            </div>
+            <div class="col-md-12 text-center mt-3">
+                <button id="runButton" class="btn btn-primary" onclick="runSimulation()">Run Simulation</button>
+                <button class="btn btn-info" onclick="document.getElementById('overlay').style.display='flex'">Show Info</button>
+            </div>
+        </div>
+        <div id="visualizations">
+            <div id="gridContainer">
+                <h3>Economic Health Grid</h3>
+                <svg id="gridSvg" width="400" height="400"></svg>
+            </div>
+            <div id="resultsContainer">
+                <h3>Agent Payoffs</h3>
+                <div id="payoffChart" class="chart"></div>
+                <table id="resultsTable" class="mt-3"><thead><tr><th>Agent</th><th>Payoff</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <div id="overlay-content">
+            <span id="overlay-close" onclick="document.getElementById('overlay').style.display='none'">X</span>
+            <h3>Simulation Explained</h3>
+            <h4>Payoff Matrix</h4>
+            <p>This simulation uses a simplified payoff matrix for the U.S. vs. EU game, capturing tariff strategies and LNG leverage. U.S. "Escalate" (T+DS+BR) nets 91 if EU retaliates (RT) due to LNG pressure, dropping to 81 otherwise. EU’s "Accept" (ADS) yields -30, while "Retaliate" (RT) sinks to -55 with energy costs. Simplified from a broader matrix, it balances revenue, GDP impact, and geopolitical strain.</p>
+            <h4>Why Cellular Automata (CA)?</h4>
+            <p>CA models complex systems by simulating local interactions—like trade blocs (USMCA, BRICS)—that ripple globally. Each cell’s health (0-1) reflects economic stability, updated by tariffs and neighbor effects. It’s ideal for visualizing systemic cascades in trade wars, where small moves trigger big shifts.</p>
+            <h4>Key Takeaways</h4>
+            <p>Findings show U.S. dominates with "Escalate" (~330 payoff), leveraging LNG and tariffs. EU struggles (-120) even with "Accept," while Emerging Markets (~100) and Crypto (~180) gain from redirection and instability. Expect trade wars over cooperation—escalation’s the Nash equilibrium, but long-term risks loom.</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
