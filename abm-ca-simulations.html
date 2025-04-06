@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liberation Day Economic Simulator</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { background-color: #f8f9fa; font-family: Arial, sans-serif; margin: 0; padding: 10px; }
+        h1 { color: #343a40; font-size: 1.5rem; text-align: center; margin-bottom: 15px; }
+        h3 { color: #343a40; font-size: 1.2rem; }
+        #controls { padding: 10px; background-color: #fff; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #runButton { background-color: #4CAF50; border: none; width: 100%; }
+        #runButton:disabled { background-color: #cccccc; }
+        #animateButton { background-color: #007bff; border: none; width: 100%; margin-top: 5px; }
+        #animateButton:disabled { background-color: #cccccc; }
+        #visualizations { display: flex; flex-direction: column; gap: 15px; margin-top: 15px; }
+        #gridContainer, #resultsContainer { background-color: #fff; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #gridSvg { width: 100%; max-width: 400px; height: auto; display: block; margin: 0 auto; }
+        .chart { width: 100%; height: 300px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { border: 1px solid #ddd; padding: 5px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        #overlay-content { background: #fff; padding: 15px; border-radius: 5px; max-width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 2px 10px rgba(0,0,0,0.3); font-size: 0.9rem; }
+        #overlay-close { float: right; cursor: pointer; font-weight: bold; }
+        @media (min-width: 768px) {
+            h1 { font-size: 2rem; }
+            h3 { font-size: 1.5rem; }
+            #visualizations { flex-direction: row; }
+            #gridContainer, #resultsContainer { flex: 1; }
+            #controls { padding: 15px; }
+            table { font-size: 1rem; }
+            th, td { padding: 8px; }
+            .chart { height: 400px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Liberation Day Economic Simulator</h1>
+        <div id="controls" class="row g-2">
+            <div class="col-12 col-md-6">
+                <label for="simulationType" class="form-label">Simulation Type:</label>
+                <select id="simulationType" class="form-select">
+                    <option value="ABM">Agent-Based Model (ABM)</option>
+                    <option value="CA">Cellular Automata (CA)</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label for="numRounds" class="form-label">Rounds:</label>
+                <input type="number" id="numRounds" class="form-control" value="5" min="1" max="20">
+            </div>
+            <div class="col-6 col-md-3">
+                <label for="mistakeProb" class="form-label">Mistake Prob:</label>
+                <input type="number" id="mistakeProb" class="form-control" value="0.05" min="0" max="1" step="0.01">
+            </div>
+            <div class="col-12 col-md-4">
+                <label for="usStrategy" class="form-label">U.S. Strategy:</label>
+                <select id="usStrategy" class="form-select">
+                    <option value="escalate">Escalate (T+DS+BR)</option>
+                    <option value="moderate">Moderate (T+DS)</option>
+                    <option value="negotiate">Negotiate (DN)</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-4">
+                <label for="euStrategy" class="form-label">EU Strategy:</label>
+                <select id="euStrategy" class="form-select">
+                    <option value="accept">Accept (ADS)</option>
+                    <option value="retaliate">Retaliate (RT)</option>
+                    <option value="diversify">Diversify (DR)</option>
+                    <option value="ignore">Ignore (DN)</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-4">
+                <label for="chinaStrategy" class="form-label">China Strategy:</label>
+                <select id="chinaStrategy" class="form-select">
+                    <option value="retaliate">Retaliate (RT)</option>
+                    <option value="redirect">Redirect (IT)</option>
+                    <option value="ignore">Ignore (DN)</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-6 mt-2">
+                <button id="runButton" class="btn btn-primary" onclick="runSimulation()">Run Simulation</button>
+            </div>
+            <div class="col-6 col-md-6 mt-2">
+                <button class="btn btn-info" onclick="document.getElementById('overlay').style.display='flex'">Show Info</button>
+            </div>
+            <div class="col-12 mt-2" id="animateControl" style="display: none;">
+                <button id="animateButton" class="btn btn-primary" onclick="animateGrid()" disabled>Animate Grid</button>
+            </div>
+        </div>
+        <div id="visualizations">
+            <div id="gridContainer" style="display: none;">
+                <h3>Economic Health Grid</h3>
+                <svg id="gridSvg"></svg>
+            </div>
+            <div id="resultsContainer">
+                <h3>Agent Payoffs</h3>
+                <div id="payoffChart" class="chart"></div>
+                <table id="resultsTable" class="mt-2"><thead><tr><th>Agent</th><th>Payoff</th></tr></thead><tbody></tbody></table>
+            </div>
+        </div>
+    </div>
+
+    <div id="overlay">
+        <div id="overlay-content">
+            <span id="overlay-close" onclick="document.getElementById('overlay').style.display='none'">X</span>
+            <h3>Simulation Explained</h3>
+            <h4>Simulation Types</h4>
+            <p><strong>ABM:</strong> Agents (US, EU, etc.) act independently, adapting strategies based on payoffs—captures individual trade moves.</p>
+            <p><strong>CA:</strong> Grid-based model of trade blocs—local rules (tariffs, retaliation) ripple globally, animated to show systemic evolution.</p>
+            <h4>Indicators</h4>
+            <p><strong>Payoffs:</strong> Cumulative gains/losses—US leverages tariffs, others face costs.</p>
+            <p><strong>CA Grid:</strong> Economic health (0-1): Red = collapse, Yellow = neutral, Green = thriving—USMCA resists, BRICS weakens.</p>
+            <h4>Results</h4>
+            <p>US "Escalate" (~320) dominates, EU (~-120) and China (~-100) struggle. EM (~110) and Crypto (~190) gain from instability. CA animations reveal trade war cascades—escalation wins short-term, risks long-term chaos.</p>
+        </div>
+    </div>
+
+    <script src="worker-simu.js"></script>
+    <script>
+        'use strict';
+
+        // Initialize SVG and Plotly
+        const svg = d3.select('#gridSvg');
+        const gridSize = Math.min(window.innerWidth * 0.9, 400); // Responsive size
+        svg.attr('width', gridSize).attr('height', gridSize);
+        const cellSize = gridSize / 20;
+        const cells = svg.selectAll('rect')
+            .data(new Float32Array(20 * 20))
+            .enter()
+            .append('rect')
+            .attr('x', (_, i) => (i % 20) * cellSize)
+            .attr('y', (_, i) => Math.floor(i / 20) * cellSize)
+            .attr('width', cellSize)
+            .attr('height', cellSize)
+            .attr('fill', 'gray');
+
+        const tbody = d3.select('#resultsTable tbody');
+        Plotly.newPlot('payoffChart', [], {
+            title: 'Cumulative Payoffs',
+            xaxis: { title: 'Round' },
+            yaxis: { title: 'Payoff' },
+            hovermode: 'closest',
+            margin: { t: 50, b: 50, l: 50, r: 20 },
+            font: { size: 10 }
+        });
+
+        const worker = new Worker('worker.js');
+        let gridHistory = [];
+
+        function runSimulation() {
+            const runButton = document.getElementById('runButton');
+            const animateButton = document.getElementById('animateButton');
+            runButton.disabled = true;
+            runButton.textContent = 'Running...';
+            animateButton.disabled = true;
+
+            const simulationType = document.getElementById('simulationType').value;
+            const numRounds = parseInt(document.getElementById('numRounds').value, 10);
+            const mistakeProb = parseFloat(document.getElementById('mistakeProb').value);
+            const usStrategy = document.getElementById('usStrategy').value;
+            const euStrategy = document.getElementById('euStrategy').value;
+            const chinaStrategy = document.getElementById('chinaStrategy').value;
+
+            document.getElementById('gridContainer').style.display = simulationType === 'CA' ? 'block' : 'none';
+            document.getElementById('animateControl').style.display = simulationType === 'CA' ? 'block' : 'none';
+            worker.postMessage({ simulationType, numRounds, mistakeProb, usStrategy, euStrategy, chinaStrategy });
+        }
+
+        worker.onmessage = function(e) {
+            const { payoffs, gridHistory: gh, payoffHistory } = e.data;
+            gridHistory = gh || [];
+
+            // Update CA grid (initial state or none for ABM)
+            if (document.getElementById('simulationType').value === 'CA') {
+                requestAnimationFrame(() => {
+                    cells.data(gridHistory[0]).attr('fill', d => d3.interpolateRdYlGn(d));
+                });
+            }
+
+            // Update table
+            const tableData = Object.entries(payoffs).map(([agent, payoff]) => ({ agent, payoff: payoff.toFixed(2) }));
+            const rows = tbody.selectAll('tr').data(tableData);
+            rows.exit().remove();
+            const enterRows = rows.enter().append('tr');
+            enterRows.append('td').text(d => d.agent);
+            enterRows.append('td').text(d => d.payoff);
+            rows.selectAll('td').data(d => [d.agent, d.payoff]).text(d => d);
+
+            // Update Plotly chart
+            const rounds = Array.from({ length: payoffHistory.US.length }, (_, i) => i + 1);
+            Plotly.react('payoffChart', [
+                { x: rounds, y: payoffHistory.US, name: 'U.S.', type: 'scatter', mode: 'lines', line: { color: 'blue' } },
+                { x: rounds, y: payoffHistory.EU, name: 'EU', type: 'scatter', mode: 'lines', line: { color: 'red' } },
+                { x: rounds, y: payoffHistory.China, name: 'China', type: 'scatter', mode: 'lines', line: { color: 'orange' } },
+                { x: rounds, y: payoffHistory.EM, name: 'Emerging', type: 'scatter', mode: 'lines', line: { color: 'green' } },
+                { x: rounds, y: payoffHistory.Crypto, name: 'Crypto', type: 'scatter', mode: 'lines', line: { color: 'purple' } }
+            ], {
+                title: 'Cumulative Payoffs',
+                xaxis: { title: 'Round' },
+                yaxis: { title: 'Payoff' },
+                margin: { t: 50, b: 50, l: 50, r: 20 },
+                font: { size: 10 },
+                legend: { x: 1, y: 1, xanchor: 'right', yanchor: 'top' }
+            });
+
+            // Reset buttons
+            const runButton = document.getElementById('runButton');
+            const animateButton = document.getElementById('animateButton');
+            runButton.disabled = false;
+            runButton.textContent = 'Run Simulation';
+            if (document.getElementById('simulationType').value === 'CA') animateButton.disabled = false;
+        };
+
+        worker.onerror = function(error) {
+            console.error('Worker error:', error);
+            const runButton = document.getElementById('runButton');
+            runButton.disabled = false;
+            runButton.textContent = 'Run Simulation (Error)';
+        };
+
+        function animateGrid() {
+            const animateButton = document.getElementById('animateButton');
+            animateButton.disabled = true;
+            let frame = 0;
+
+            const animate = () => {
+                if (frame < gridHistory.length) {
+                    cells.data(gridHistory[frame]).attr('fill', d => d3.interpolateRdYlGn(d));
+                    frame++;
+                    setTimeout(() => requestAnimationFrame(animate), 500); // 500ms per frame
+                } else {
+                    animateButton.disabled = false;
+                }
+            };
+            requestAnimationFrame(animate);
+        }
+    </script>
+</body>
+</html>
