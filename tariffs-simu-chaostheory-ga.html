@@ -1,0 +1,172 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from deap import base, creator, tools, algorithms
+import random
+
+# Set seed for reproducibility
+np.random.seed(42)
+random.seed(42)
+
+# --- Chaos Theory: Non-Linear Dynamics ---
+def simulate_dynamics(T, R, F0=1.0, G0=2.0, I0=2.0, t_max=10, dt=0.1):
+    k, alpha, beta = 0.12, 0.55, 0.35
+    gamma, delta = 0.85, 0.45
+    epsilon, zeta = 0.25, 0.18
+    
+    steps = int(t_max / dt)
+    F, G, I = np.zeros(steps), np.zeros(steps), np.zeros(steps)
+    F[0], G[0], I[0] = F0, G0, I0
+    
+    for t in range(steps - 1):
+        dF = -k * F[t] + alpha * T - beta * R
+        dG = gamma * F[t] - delta * I[t]
+        dI = epsilon * T + zeta * R
+        F[t + 1] = F[t] + dt * dF
+        G[t + 1] = G[t] + dt * dG
+        I[t + 1] = I[t] + dt * dI
+    
+    return F, G, I
+
+# Run dynamics for strategy grid
+regions = ['U.S.', 'EU', 'China']
+tariffs = [0.1, 0.3, 0.5]
+retaliations = [0.0, 0.2, 0.4]
+initial_conditions = {
+    'U.S.': {'F0': 1.0, 'G0': 2.5, 'I0': 2.0},
+    'EU': {'F0': 1.0, 'G0': 1.5, 'I0': 2.0},
+    'China': {'F0': 1.0, 'G0': 2.0, 'I0': 2.0}
+}
+
+results = {region: [] for region in regions}
+for region in regions:
+    for T in tariffs:
+        for R in retaliations:
+            F, G, I = simulate_dynamics(
+                T=T, R=R, 
+                F0=initial_conditions[region]['F0'],
+                G0=initial_conditions[region]['G0'],
+                I0=initial_conditions[region]['I0']
+            )
+            payoff = G[-1] + 0.5 * F[-1] - I[-1]
+            results[region].append({
+                'T': T, 'R': R, 'F': F, 'G': G, 'I': I, 'Payoff': payoff
+            })
+
+# Phase Diagram
+plt.figure(figsize=(12, 8))
+colors = ['g', 'b', 'r']
+for i, region in enumerate(regions):
+    for res in results[region]:
+        plt.plot(res['F'], res['G'], f'{colors[i]}', alpha=0.3, linewidth=1)
+    best = max(results[region], key=lambda x: x['Payoff'])
+    plt.plot(best['F'], best['G'], f'{colors[i]}o', markersize=10, label=f'{region} (T={best["T"]}, R={best["R"]})')
+plt.xlabel('Trade Flow (F)')
+plt.ylabel('GDP Growth (G)')
+plt.title('Trade-GDP Phase Space: Emergent Strategies (10 Years)')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# --- Information Theory: Shannon’s Entropy ---
+def calculate_entropy(prob):
+    return -np.sum([p * np.log2(p) for p in prob if p > 0])
+
+partners = ['U.S.', 'EU', 'China', 'India', 'RCEP']
+pre_probs = [0.3, 0.3, 0.2, 0.1, 0.1]
+post_probs = {
+    'U.S.': [0.5, 0.2, 0.1, 0.1, 0.1],
+    'EU': [0.2, 0.3, 0.1, 0.2, 0.2],
+    'China': [0.1, 0.1, 0.4, 0.1, 0.3],
+    'Crypto': [0.2, 0.2, 0.2, 0.2, 0.2]
+}
+
+H_pre = calculate_entropy(pre_probs)
+H_post = {region: calculate_entropy(probs) for region, probs in post_probs.items()}
+print(f"Pre-Tariff Entropy: {H_pre:.2f} bits")
+for region, h in H_post.items():
+    print(f"{region} Post-Tariff Entropy: {h:.2f} bits")
+
+# Heatmap
+heatmap_data = np.array([post_probs[region] for region in post_probs])
+plt.figure(figsize=(10, 6))
+sns.heatmap(heatmap_data, annot=True, cmap='Blues', xticklabels=partners, yticklabels=list(post_probs.keys()))
+plt.title('Trade Entropy Heatmap: Post-Tariff Uncertainty (April 11, 2025)')
+plt.xlabel('Trade Partners')
+plt.ylabel('Regions')
+plt.show()
+
+# --- Genetic Algorithm (Fixed Visualization) ---
+# Define fitness and individual
+creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+creator.create("Individual", list, fitness=creator.FitnessMax)
+
+payoffs = {
+    'US': {'Escalate': 0.2, 'Moderate': 0.1, 'Negotiate': -0.1},
+    'EU': {'DebtSwaps': -0.1, 'Retaliate': -0.2, 'Diversify': 0.0},
+    'China': {'Redirect': 0.1, 'Crypto': -0.05, 'StatusQuo': -0.15},
+    'Crypto': {'Invest': 0.15, 'Sell': -0.05, 'Hold': -0.1}
+}
+strategies = list(payoffs.keys())
+
+def evaluate(individual):
+    total_fitness = 0
+    for i, strat_idx in enumerate(individual):
+        region = strategies[i]
+        strat = list(payoffs[region].keys())[strat_idx]
+        T = {'Escalate': 0.5, 'Moderate': 0.3, 'Negotiate': 0.1, 
+             'DebtSwaps': 0.1, 'Retaliate': 0.4, 'Diversify': 0.2,
+             'Redirect': 0.3, 'Crypto': 0.2, 'StatusQuo': 0.0,
+             'Invest': 0.0, 'Sell': 0.0, 'Hold': 0.0}.get(strat, 0.0)
+        R = {'Escalate': 0.0, 'Moderate': 0.0, 'Negotiate': 0.0, 
+             'DebtSwaps': 0.0, 'Retaliate': 0.4, 'Diversify': 0.0,
+             'Redirect': 0.2, 'Crypto': 0.0, 'StatusQuo': 0.0,
+             'Invest': 0.0, 'Sell': 0.0, 'Hold': 0.0}.get(strat, 0.0)
+        F, G, I = simulate_dynamics(
+            T, R, 
+            **initial_conditions[region] if region in initial_conditions else {'F0': 1.0, 'G0': 2.0, 'I0': 2.0}
+        )
+        total_fitness += G[-1] + 0.5 * F[-1] - I[-1]
+    return (total_fitness,)
+
+# Toolbox setup
+toolbox = base.Toolbox()
+toolbox.register("attr_int", random.randint, 0, 2)
+toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_int, n=4)
+toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+toolbox.register("evaluate", evaluate)
+toolbox.register("mate", tools.cxOnePoint)
+toolbox.register("mutate", tools.mutUniformInt, low=0, up=2, indpb=0.1)
+toolbox.register("select", tools.selTournament, tournsize=3)
+
+# Run GA with explicit statistics
+population = toolbox.population(n=100)
+hof = tools.HallOfFame(1)
+stats = tools.Statistics(lambda ind: ind.fitness.values[0])
+stats.register("avg", np.mean)
+stats.register("max", np.max)
+
+# Store fitness history
+fitness_history = []
+for gen in range(50):
+    population = algorithms.eaSimple(
+        population, toolbox, cxpb=0.8, mutpb=0.1, ngen=1, 
+        stats=stats, halloffame=hof, verbose=False
+    )[0]
+    record = stats.compile(population)
+    fitness_history.append(record['avg'])
+
+# Results
+best_strat = hof[0]
+print("Best Strategy:", [list(payoffs[strategies[i]].keys())[idx] for i, idx in enumerate(best_strat)])
+print("Fitness:", hof[0].fitness.values[0])
+
+# Visualization: Fitness Plot
+plt.figure(figsize=(10, 6))
+plt.plot(range(50), fitness_history, 'b-', label='Average Fitness')
+plt.xlabel('Generation')
+plt.ylabel('Fitness')
+plt.title('Genetic Algorithm: Strategy Optimization Over Time')
+plt.legend()
+plt.grid(True)
+plt.show()
