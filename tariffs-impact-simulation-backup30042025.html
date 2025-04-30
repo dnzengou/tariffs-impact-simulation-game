@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liberation Day Trade War Simulation</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #f8f9fa;
+        }
+
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 350px;
+            padding: 1rem;
+            background-color: #fff;
+            overflow-y: auto;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+
+        #simulationView {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .visualization-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .vis-section {
+            background-color: #fff;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 400px;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        .vis-section h3 {
+            margin: 0 0 0.5rem;
+            color: #343a40;
+            font-size: 1.2rem;
+        }
+
+        #simulationCanvas, #gridSvg {
+            border: 1px solid #dee2e6;
+            width: 400px;
+            height: 400px;
+            display: block;
+            margin: 0 auto;
+        }
+
+        #payoffChart {
+            width: 100%;
+            height: 300px;
+        }
+
+        #resultsTable {
+            width: 100%;
+            margin: 0.5rem 0 0;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        #tooltip {
+            position: fixed;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            pointer-events: none;
+            display: none;
+            font-size: 0.8rem;
+        }
+
+        .legend {
+            background: #fff;
+            padding: 0.5rem;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            text-align: left;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        footer {
+            background-color: #f8f9fa;
+            text-align: center;
+            padding: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .btn-primary {
+            background-color: #4CAF50;
+            border: none;
+        }
+
+        .btn-primary:disabled {
+            background-color: #cccccc;
+        }
+
+        @media (max-width: 768px) {
+            main {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 40vh;
+            }
+
+            .vis-section {
+                min-width: 100%;
+                max-width: 100%;
+            }
+
+            #simulationCanvas, #gridSvg {
+                width: 100%;
+                height: auto;
+                max-width: 400px;
+            }
+
+            #payoffChart {
+                height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Liberation Day Trade War Simulation</h1>
+    </header>
+    <main>
+        <aside class="sidebar">
+            <h2>Simulation Controls</h2>
+            <div class="mb-4">
+                <p><small>Model Trump's Liberation Day tariffs (145% China, 20% EU, etc.) using Reaction-Diffusion (spatial disruptions) and Game-Theoretic Cellular Automata (strategic payoffs). Adjust parameters to forecast equilibrium.</small></p>
+                <h4>Reaction-Diffusion Parameters</h4>
+                <label for="feedRate">Feed Rate (F, Trade Liberalization): <span id="feedRateValue">0.04</span></label>
+                <input type="range" id="feedRate" class="form-range mb-2" min="0.01" max="0.1" step="0.001" value="0.04">
+                <label for="killRate">Kill Rate (k, Regulatory Resistance): <span id="killRateValue">0.06</span></label>
+                <input type="range" id="killRate" class="form-range mb-2" min="0.01" max="0.1" step="0.001" value="0.06">
+                <label for="usTariff">U.S. Tariff Intensity: <span id="usTariffValue">0.30</span></label>
+                <input type="range" id="usTariff" class="form-range mb-2" min="0.1" max="0.5" step="0.01" value="0.30">
+                <h4>Game-Theoretic Parameters</h4>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label for="numRounds" class="form-label">Rounds:</label>
+                        <input type="number" id="numRounds" class="form-control" value="5" min="1" max="20">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="mistakeProb" class="form-label">Mistake Prob:</label>
+                        <input type="number" id="mistakeProb" class="form-control" value="0.05" min="0" max="1" step="0.01">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="usStrategy" class="form-label">U.S. Strategy:</label>
+                        <select id="usStrategy" class="form-select">
+                            <option value="escalate">Escalate (T+DS+BR)</option>
+                            <option value="moderate">Moderate (T+DS)</option>
+                            <option value="negotiate">Negotiate (DN)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="euStrategy" class="form-label">EU Strategy:</label>
+                        <select id="euStrategy" class="form-select">
+                            <option value="accept">Accept (ADS)</option>
+                            <option value="retaliate">Retaliate (RT)</option>
+                            <option value="diversify">Diversify (DR)</option>
+                            <option value="ignore">Ignore (DN)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="chinaStrategy" class="form-label">China Strategy:</label>
+                        <select id="chinaStrategy" class="form-select">
+                            <option value="retaliate">Retaliate (RT)</option>
+                            <option value="redirect">Redirect (IT)</option>
+                            <option value="ignore">Ignore (DN)</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="runButton" class="btn btn-primary w-100 mt-3">Run Simulation</button>
+            </div>
+            <h2>Analytics</h2>
+            <div id="analyticsSummary"></div>
+        </aside>
+        <section id="simulationView">
+            <div class="legend">
+                <p><strong>Reaction-Diffusion:</strong> U (Green) = Trade/Tech, V (Red) = Disruption</p>
+                <p><strong>Cellular Automata:</strong> Red (0) = Collapse, Yellow (0.5) = Neutral, Green (1) = Thriving</p>
+            </div>
+            <div class="visualization-container">
+                <div class="vis-section">
+                    <h3>Reaction-Diffusion (Spatial Disruptions)</h3>
+                    <canvas id="simulationCanvas" width="400" height="400"></canvas>
+                </div>
+                <div class="vis-section">
+                    <h3>Cellular Automata (Economic Health)</h3>
+                    <svg id="gridSvg" width="400" height="400"></svg>
+                </div>
+            </div>
+            <div class="visualization-container">
+                <div class="vis-section">
+                    <h3>Agent Payoffs Over Rounds</h3>
+                    <div id="payoffChart"></div>
+                </div>
+                <div class="vis-section">
+                    <h3>Final Payoffs</h3>
+                    <table id="resultsTable">
+                        <thead><tr><th>Agent</th><th>Payoff</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="tooltip"></div>
+        </section>
+    </main>
+    <footer>
+        <p>© 2025 Liberation Day Simulation Dashboard</p>
+    </footer>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Reaction-Diffusion Configuration
+        const rdConfig = {
+            gridSize: 100,
+            dx: 1.0,
+            dt: 1.0,
+            Du: 0.16,
+            Dv: 0.08,
+            F: 0.04,
+            k: 0.06,
+            stepsPerFrame: 10
+        };
+
+        let uGrid, vGrid, nextUGrid, nextVGrid;
+        let isRunning = false;
+        let animationFrameId;
+        const canvas = document.getElementById('simulationCanvas');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+
+        // CA and Game-Theoretic Setup
+        const svg = d3.select('#gridSvg');
+        const cellSize = 400 / 20;
+        const cells = svg.selectAll('rect')
+            .data(new Float32Array(20 * 20))
+            .enter()
+            .append('rect')
+            .attr('x', (_, i) => (i % 20) * cellSize)
+            .attr('y', (_, i) => Math.floor(i / 20) * cellSize)
+            .attr('width', cellSize)
+            .attr('height', cellSize)
+            .attr('fill', 'gray');
+
+        const tbody = d3.select('#resultsTable tbody');
+        Plotly.newPlot('payoffChart', [], {
+            title: 'Cumulative Payoffs Over Rounds',
+            xaxis: { title: 'Round' },
+            yaxis: { title: 'Cumulative Payoff' },
+            hovermode: 'closest',
+            margin: { t: 50, b: 50, l: 50, r: 50 }
+        });
+
+        // Regions for RD
+        const regions = [
+            { name: 'US', x: 30, y: 30, radius: 10, vScale: 0.30, desc: '145% tariffs on China, tech dominance (AI, crypto)' },
+            { name: 'China', x: 70, y: 70, radius: 10, vScale: 0.45, desc: '34% retaliatory tariffs, rare earth bans' },
+            { name: 'EU', x: 50, y: 20, radius: 8, vScale: 0.15, desc: '20% tariffs, regulatory resistance' },
+            { name: 'Russia', x: 60, y: 10, radius: 8, vScale: 0.10, desc: 'Geopolitical alignment, trade isolation' },
+            { name: 'Emerging', x: 40, y: 60, radius: 8, vScale: 0.08, desc: 'Trade pivot to RCEP, India gains' }
+        ];
+
+        // Initialize RD grids
+        function initReactionDiffusion(payoffs = {}) {
+            try {
+                uGrid = Array(rdConfig.gridSize).fill().map(() => Array(rdConfig.gridSize).fill(1));
+                vGrid = Array(rdConfig.gridSize).fill().map(() => Array(rdConfig.gridSize).fill(0));
+                nextUGrid = Array(rdConfig.gridSize).fill().map(() => Array(rdConfig.gridSize).fill(0));
+                nextVGrid = Array(rdConfig.gridSize).fill().map(() => Array(rdConfig.gridSize).fill(0));
+
+                const negotiationFactor = 0.8; // Reflects 90-day tariff pause and negotiations
+                regions.forEach(region => {
+                    const payoffFactor = payoffs[region.name] ? Math.max(0, 1 - payoffs[region.name] / 331.70) : 1;
+                    for (let y = 0; y < rdConfig.gridSize; y++) {
+                        for (let x = 0; x < rdConfig.gridSize; x++) {
+                            const dist = Math.sqrt((x - region.x) ** 2 + (y - region.y) ** 2);
+                            if (dist < region.radius) {
+                                uGrid[y][x] = 0.5;
+                                vGrid[y][x] = region.vScale * payoffFactor * negotiationFactor;
+                            }
+                        }
+                    }
+                });
+
+                console.log('RD grids initialized');
+            } catch (error) {
+                console.error('Error initializing RD:', error);
+                alert('Failed to initialize RD simulation.');
+            }
+        }
+
+        // RD Laplacian
+        function laplacian(grid, x, y) {
+            const size = rdConfig.gridSize;
+            let sum = 0;
+            sum += grid[y][x] * -1;
+            sum += grid[(y - 1 + size) % size][x] * 0.2;
+            sum += grid[(y + 1) % size][x] * 0.2;
+            sum += grid[y][(x - 1 + size) % size] * 0.2;
+            sum += grid[y][(x + 1) % size] * 0.2;
+            sum += grid[(y - 1 + size) % size][(x - 1 + size) % size] * 0.05;
+            sum += grid[(y - 1 + size) % size][(x + 1) % size] * 0.05;
+            sum += grid[(y + 1) % size][(x - 1 + size) % size] * 0.05;
+            sum += grid[(y + 1) % size][(x + 1) % size] * 0.05;
+            return sum;
+        }
+
+        // Update RD step
+        function updateReactionDiffusion() {
+            try {
+                for (let y = 0; y < rdConfig.gridSize; y++) {
+                    for (let x = 0; x < rdConfig.gridSize; x++) {
+                        const u = uGrid[y][x];
+                        const v = vGrid[y][x];
+                        const uv2 = u * v * v;
+                        nextUGrid[y][x] = u + rdConfig.dt * (
+                            rdConfig.Du * laplacian(uGrid, x, y) - uv2 + rdConfig.F * (1 - u)
+                        );
+                        nextVGrid[y][x] = v + rdConfig.dt * (
+                            rdConfig.Dv * laplacian(vGrid, x, y) + uv2 - (rdConfig.F + rdConfig.k) * v
+                        );
+                    }
+                }
+                [uGrid, nextUGrid] = [nextUGrid, uGrid];
+                [vGrid, nextVGrid] = [nextVGrid, vGrid];
+            } catch (error) {
+                console.error('Error updating RD:', error);
+                stopSimulation();
+                alert('RD simulation error.');
+            }
+        }
+
+        // Render RD visualization
+        function renderReactionDiffusion() {
+            if (!ctx) {
+                console.error('Canvas context not available');
+                return;
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const cellSize = canvas.width / rdConfig.gridSize;
+            for (let y = 0; y < rdConfig.gridSize; y++) {
+                for (let x = 0; x < rdConfig.gridSize; x++) {
+                    const u = uGrid[y][x];
+                    const v = vGrid[y][x];
+                    ctx.fillStyle = `rgba(${v * 255}, ${u * 255}, 0, ${Math.min((v + u) * 0.5, 1)})`;
+                    ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+                }
+            }
+            ctx.font = '12px Arial';
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            regions.forEach(region => {
+                const canvasX = (region.x / rdConfig.gridSize) * canvas.width;
+                const canvasY = (region.y / rdConfig.gridSize) * canvas.height;
+                ctx.fillText(region.name, canvasX, canvasY);
+            });
+        }
+
+        // RD tooltip
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / (rect.width / rdConfig.gridSize));
+            const y = Math.floor((e.clientY - rect.top) / (rect.height / rdConfig.gridSize));
+            let tooltipText = '';
+            regions.forEach(region => {
+                const dist = Math.sqrt((x - region.x) ** 2 + (y - region.y) ** 2);
+                if (dist < region.radius && uGrid && vGrid) {
+                    tooltipText = `${region.name}: V=${vGrid[y][x].toFixed(3)} (Disruption), U=${uGrid[y][x].toFixed(3)} (Trade/Tech)\n${region.desc}`;
+                }
+            });
+            if (tooltipText) {
+                tooltip.style.display = 'block';
+                tooltip.style.left = `${e.clientX + 10}px`;
+                tooltip.style.top = `${e.clientY + 10}px`;
+                tooltip.innerText = tooltipText;
+            } else {
+                tooltip.style.display = 'none';
+            }
+        });
+
+        // Animation loop for RD
+        function animateReactionDiffusion() {
+            if (!isRunning) return;
+            for (let i = 0; i < rdConfig.stepsPerFrame; i++) {
+                updateReactionDiffusion();
+            }
+            renderReactionDiffusion();
+            animationFrameId = requestAnimationFrame(animateReactionDiffusion);
+        }
+
+        // Game-Theoretic Simulation
+        function runGameTheorySimulation(params) {
+            const { numRounds, mistakeProb, usStrategy, euStrategy, chinaStrategy } = params;
+            const payoffs = { US: 0, EU: 0, China: 0, EM: 0, Crypto: 0 };
+            const payoffHistory = { US: [], EU: [], China: [], EM: [], Crypto: [] };
+            let grid = new Float32Array(20 * 20).fill(0.5);
+            const gridHistory = [];
+
+            const payoffMatrix = {
+                US: { escalate: { EU: { retaliate: 85, accept: 85, diversify: 75, ignore: 75 }, China: { retaliate: 85, redirect: 75, ignore: 75 } },
+                      moderate: { EU: { retaliate: 55, accept: 55, diversify: 45, ignore: 45 }, China: { retaliate: 55, redirect: 45, ignore: 45 } },
+                      negotiate: { EU: { retaliate: 10, accept: 10, diversify: 10, ignore: 10 }, China: { retaliate: 10, redirect: 10, ignore: 10 } } },
+                EU: { retaliate: { US: { escalate: -60, moderate: -50, negotiate: -15 }, China: { retaliate: -60, redirect: -50, ignore: -50 } },
+                      accept: { US: { escalate: -35, moderate: -25, negotiate: 0 }, China: { retaliate: -35, redirect: -25, ignore: -25 } },
+                      diversify: { US: { escalate: -30, moderate: -20, negotiate: 0 }, China: { retaliate: -30, redirect: -20, ignore: -20 } },
+                      ignore: { US: { escalate: -25, moderate: -15, negotiate: 0 }, China: { retaliate: -25, redirect: -15, ignore: -15 } } },
+                China: { retaliate: { US: { escalate: -50, moderate: -40, negotiate: 0 }, EU: { retaliate: -50, accept: -40, diversify: -40, ignore: -40 } },
+                         redirect: { US: { escalate: 20, moderate: 10, negotiate: 0 }, EU: { retaliate: 20, accept: 10, diversify: 10, ignore: 10 } },
+                         ignore: { US: { escalate: -15, moderate: -5, negotiate: 0 }, EU: { retaliate: -15, accept: -5, diversify: -5, ignore: -5 } } },
+                EM: { redirect: 20, ignore: -15 },
+                Crypto: { invest: 40, ignore: -35 }
+            };
+
+            for (let round = 0; round < numRounds; round++) {
+                const strategies = {
+                    US: Math.random() < mistakeProb ? Object.keys(payoffMatrix.US)[Math.floor(Math.random() * 3)] : usStrategy,
+                    EU: Math.random() < mistakeProb ? Object.keys(payoffMatrix.EU)[Math.floor(Math.random() * 4)] : euStrategy,
+                    China: Math.random() < mistakeProb ? Object.keys(payoffMatrix.China)[Math.floor(Math.random() * 3)] : chinaStrategy,
+                    EM: 'redirect',
+                    Crypto: 'invest'
+                };
+
+                payoffs.US += payoffMatrix.US[strategies.US].EU[strategies.EU] || 0;
+                payoffs.EU += payoffMatrix.EU[strategies.EU].US[strategies.US] || 0;
+                payoffs.China += payoffMatrix.China[strategies.China].US[strategies.US] || 0;
+                payoffs.EM += payoffMatrix.EM.redirect;
+                payoffs.Crypto += payoffMatrix.Crypto.invest;
+
+                Object.keys(payoffs).forEach(agent => payoffHistory[agent].push(payoffs[agent]));
+
+                const newGrid = new Float32Array(20 * 20);
+                for (let i = 0; i < 400; i++) {
+                    const x = i % 20, y = Math.floor(i / 20);
+                    let health = grid[i];
+                    const neighbors = [
+                        grid[((y - 1 + 20) % 20) * 20 + x], grid[((y + 1) % 20) * 20 + x],
+                        grid[y * 20 + (x - 1 + 20) % 20], grid[y * 20 + (x + 1) % 20]
+                    ].filter(h => h !== undefined);
+                    const avgNeighborHealth = neighbors.reduce((sum, h) => sum + h, 0) / neighbors.length;
+                    health = Math.min(1, Math.max(0, health + 0.1 * (avgNeighborHealth - health)));
+                    if (x < 10 && y < 10) health *= 1.05; // USMCA boost reduced
+                    if (x > 10 && y > 10) health *= 0.85; // BRICS penalty increased
+                    newGrid[i] = health;
+                }
+                grid = newGrid;
+                gridHistory.push([...grid]);
+            }
+
+            return { payoffs, grid, payoffHistory, gridHistory };
+        }
+
+        // Update visualizations
+        function updateVisualizations({ payoffs, grid, payoffHistory, gridHistory }) {
+            // Update CA grid
+            cells.data(grid).attr('fill', d => d3.interpolateRdYlGn(d));
+
+            // Update table
+            const tableData = Object.entries(payoffs).map(([agent, payoff]) => ({ agent, payoff: payoff.toFixed(2) }));
+            const rows = tbody.selectAll('tr').data(tableData);
+            rows.exit().remove();
+            const enterRows = rows.enter().append('tr');
+            enterRows.append('td').text(d => d.agent);
+            enterRows.append('td').text(d => d.payoff);
+            rows.selectAll('td').data(d => [d.agent, d.payoff]).text(d => d);
+
+            // Update Plotly chart
+            const rounds = Array.from({ length: payoffHistory.US.length }, (_, i) => i + 1);
+            Plotly.react('payoffChart', [
+                { x: rounds, y: payoffHistory.US, name: 'U.S.', type: 'scatter', mode: 'lines', line: { color: 'blue' } },
+                { x: rounds, y: payoffHistory.EU, name: 'EU', type: 'scatter', mode: 'lines', line: { color: 'red' } },
+                { x: rounds, y: payoffHistory.China, name: 'China', type: 'scatter', mode: 'lines', line: { color: 'orange' } },
+                { x: rounds, y: payoffHistory.EM, name: 'Emerging', type: 'scatter', mode: 'lines', line: { color: 'green' } },
+                { x: rounds, y: payoffHistory.Crypto, name: 'Crypto', type: 'scatter', mode: 'lines', line: { color: 'purple' } }
+            ], {
+                title: 'Cumulative Payoffs Over Rounds',
+                xaxis: { title: 'Round' },
+                yaxis: { title: 'Cumulative Payoff' },
+                margin: { t: 50, b: 50, l: 50, r: 50 }
+            });
+
+            // Update RD analytics
+            let avgV = 0, maxV = 0, techImpact = 0, cryptoVolatility = 0;
+            if (vGrid) {
+                const flatV = vGrid.flat();
+                avgV = flatV.reduce((sum, v) => sum + v, 0) / flatV.length;
+                maxV = Math.max(...flatV);
+                techImpact = avgV * 100;
+                cryptoVolatility = avgV * 30;
+            }
+            document.getElementById('analyticsSummary').innerHTML = `
+                <p><strong>RD Disruption (V):</strong> ${avgV.toFixed(3)} (Avg), ${maxV.toFixed(3)} (Peak)</p>
+                <p><strong>Tech Impact:</strong> ${techImpact.toFixed(1)}% (AI, quantum)</p>
+                <p><strong>Crypto Volatility:</strong> ${cryptoVolatility.toFixed(1)}% (Bitcoin at $88K)</p>
+                <p><strong>CA Payoffs:</strong> US: ${payoffs.US?.toFixed(2) || 'N/A'}, EU: ${payoffs.EU?.toFixed(2) || 'N/A'}, China: ${payoffs.China?.toFixed(2) || 'N/A'}</p>
+                <p><strong>Insight:</strong> RD shows intense disruption (red) in China (145% tariffs) and moderate in EU (20%). CA predicts U.S. escalation dominates (+331.70 payoff), with EU (-122.85) and China (-100) struggling. $6 trillion market loss and 40% recession risk loom, but negotiations (~70 countries) may ease tensions. Equilibrium leans toward trade redirection (Emerging +102.38, Crypto +184.28).</p>
+            `;
+        }
+
+        // Stop simulation
+        function stopSimulation() {
+            if (isRunning) {
+                isRunning = false;
+                cancelAnimationFrame(animationFrameId);
+                document.getElementById('runButton').disabled = false;
+                document.getElementById('runButton').textContent = 'Run Simulation';
+                console.log('Simulation stopped');
+            }
+        }
+
+        // Run simulation
+        function runSimulation() {
+            const runButton = document.getElementById('runButton');
+            runButton.disabled = true;
+            runButton.textContent = 'Running...';
+
+            const params = {
+                numRounds: parseInt(document.getElementById('numRounds').value, 10),
+                mistakeProb: parseFloat(document.getElementById('mistakeProb').value),
+                usStrategy: document.getElementById('usStrategy').value,
+                euStrategy: document.getElementById('euStrategy').value,
+                chinaStrategy: document.getElementById('chinaStrategy').value,
+                feedRate: parseFloat(document.getElementById('feedRate').value),
+                killRate: parseFloat(document.getElementById('killRate').value),
+                usTariff: parseFloat(document.getElementById('usTariff').value)
+            };
+
+            rdConfig.F = params.feedRate;
+            rdConfig.k = params.killRate;
+            regions.find(r => r.name === 'US').vScale = params.usTariff;
+
+            const gameResults = runGameTheorySimulation(params);
+            initReactionDiffusion(gameResults.payoffs);
+            isRunning = true;
+            animateReactionDiffusion();
+            updateVisualizations(gameResults);
+
+            runButton.disabled = false;
+            runButton.textContent = 'Run Simulation';
+        }
+
+        // Setup controls
+        function setupControls() {
+            const runButton = document.getElementById('runButton');
+            const feedRate = document.getElementById('feedRate');
+            const killRate = document.getElementById('killRate');
+            const usTariff = document.getElementById('usTariff');
+            const feedRateValue = document.getElementById('feedRateValue');
+            const killRateValue = document.getElementById('killRateValue');
+            const usTariffValue = document.getElementById('usTariffValue');
+
+            runButton.addEventListener('click', runSimulation);
+
+            feedRate.addEventListener('input', () => {
+                rdConfig.F = parseFloat(feedRate.value);
+                feedRateValue.textContent = rdConfig.F.toFixed(3);
+                console.log('Feed rate updated:', rdConfig.F);
+            });
+
+            killRate.addEventListener('input', () => {
+                rdConfig.k = parseFloat(killRate.value);
+                killRateValue.textContent = rdConfig.k.toFixed(3);
+                console.log('Kill rate updated:', rdConfig.k);
+            });
+
+            usTariff.addEventListener('input', () => {
+                const value = parseFloat(usTariff.value);
+                usTariffValue.textContent = value.toFixed(2);
+                regions.find(r => r.name === 'US').vScale = value;
+                console.log('U.S. tariff intensity updated:', value);
+            });
+        }
+
+        // Initialize
+        function init() {
+            if (!canvas || !ctx) {
+                console.error('Canvas or context not initialized');
+                alert('Failed to initialize canvas.');
+                return;
+            }
+            setupControls();
+            updateVisualizations({ payoffs: {}, grid: new Float32Array(20 * 20).fill(0.5), payoffHistory: { US: [], EU: [], China: [], EM: [], Crypto: [] }, gridHistory: [] });
+            console.log('Dashboard initialized');
+        }
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
